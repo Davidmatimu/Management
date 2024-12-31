@@ -1,0 +1,17 @@
+.registration-container {
+    /* Add your styles for the registration container */
+}
+
+.form-grid {
+    display: flex;
+    justify-content: space-between;
+}
+
+.form-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    margin-right: 10px; /* Adjust as needed */
+}
+
+/* Add other CSS styling as needed */
