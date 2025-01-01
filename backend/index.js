@@ -1,86 +1,94 @@
 const express = require('express');
-const cors = require('cors')
-const bcrypt = require('bcrypt')
-const jwt = require('jsonwebtoken')
+const cors = require('cors');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const sql = require('mssql');
+const employeeRoutes = require('./employeeRoutes.ts');
+const myrequestsRoutes = require('./requestsRoutes.ts');
 const db = require('./db/connection.js')
-const employeeRoutes = require('./employeeRoutes.ts')
-const myrequestsRoutes = require('./requestsRoutes.ts')
 
-const app = express()
+const app = express();
 const port = 5500;
-app.use(express.json())
+
+app.use(express.json());
 app.use(cors());
 
-app.use('/register', employeeRoutes)
-app.use('/myrequests', employeeRoutes)
+app.use('/register', employeeRoutes);
+app.use('/myrequests', employeeRoutes);
 
-//Login Endpoint
+// Login Endpoint
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
-    //Check if username and password are present
+
     if (!username || !password) {
         return res.status(400).json({ message: 'Username and Password are Required' });
     }
+    try {
+        const result = await db.request()
+            .input('username', sql.VarChar, username)
+            .query('SELECT * FROM users WHERE username = @username');
 
-    const sql = 'SELECT * FROM users WHERE username = ?';
-    db.query(sql, [username], async (err, result) => {
-        if (err || result.length === 0) {
-            console.log("Error Searching for username: " + err)
-            res.status(404).json({ message: "No username found" })
-        } else {
-            //compare hashed password
-            const match = await bcrypt.compare(password, result[0].password);
-            if (match) {
-                //create a jwt token
-                const token = jwt.sign({ userId: result[0].id }, 'my_secret_key', { expiresIn: '1h' });
-                res.json({ message: 'Login Successful', token })
-            } else {
-                res.status(401).json({ message: 'Invalid Password' })
-            }
+        if (result.recordset.length === 0) {
+            return res.status(404).json({ message: "No username found" });
         }
-    })
+
+        const user = result.recordset[0];
+        const match = await bcrypt.compare(password, user.password);
+
+        if (match) {
+            const token = jwt.sign({ userId: user.id }, 'my_secret_key', { expiresIn: '1h' });
+            res.json({ message: 'Login Successful', token });
+        } else {
+            res.status(401).json({ message: 'Invalid Password' });
+        }
+    } catch (err) {
+        console.error("Error during login:", err.message);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
 });
 
-//Authentication Middleware using JWT
+// Authentication Middleware using JWT
 const authenticate = (req, res, next) => {
     const token = req.header('Authorization');
-    console.log("Unextracted Token: " + token)
-
     if (!token) {
-        return res.status(401).json({ message: "Unauthorized" })
+        return res.status(401).json({ message: "Unauthorized" });
     }
-    const extractedToken = token.split(' ')[1];
-    console.log('Actual TOken: ' + extractedToken)
 
     try {
-        // /verift and validate our token
-        const decoded = jwt.verify(extractedToken, 'my_secret_key')
+        const extractedToken = token.split(' ')[1];
+        const decoded = jwt.verify(extractedToken, 'my_secret_key');
         req.userId = decoded.userId;
         next();
-
     } catch (err) {
-        res.status(401).json({ message: "Invalid Token" })
+        res.status(401).json({ message: "Invalid Token" });
     }
-}
+};
 
-app.get('/profile', authenticate, (req, res)=>{
+// Profile Endpoint
+app.get('/profile', authenticate, async (req, res) => {
     const userId = req.userId;
-    const sql = "SELECT * FROM users WHERE id = ?";
-    db.query(sql, [userId], (err, result)=>{
-        if (err || result.length === 0) {
-            res.status(500).json({message: "Error Fetching Details"})
-        }else{
-            res.json(result[0]); // Send the full user object
-            console.log(result[0]);
+
+    try {
+        const result = await db.request()
+            .input('id', sql.Int, userId)
+            .query('SELECT * FROM users WHERE id = @id');
+
+        if (result.recordset.length === 0) {
+            return res.status(404).json({ message: "User not found" });
         }
-    })
+
+        res.json(result.recordset[0]);
+    } catch (err) {
+        console.error("Error fetching user profile:", err.message);
+        res.status(500).json({ message: "Error fetching details" });
+    }
 });
 
-app.post('/profile/update', authenticate, (req, res) => {
-    const userId = req.userId; // User ID from authentication middleware
-    const updatedFields = req.body; // Fields to be updated, sent from the client
-    
-    // Generate SQL SET clause dynamically based on fields in the request body
+// Profile Update Endpoint
+app.post('/profile/update', authenticate, async (req, res) => {
+    const userId = req.userId;
+    const updatedFields = req.body;
+
     const fields = Object.keys(updatedFields);
     const values = Object.values(updatedFields);
 
@@ -88,42 +96,40 @@ app.post('/profile/update', authenticate, (req, res) => {
         return res.status(400).json({ message: "No fields provided for update." });
     }
 
-    // Build the SET clause for the SQL UPDATE statement
-    const setClause = fields.map((field) => `${field} = ?`).join(', ');
-    const sql = `UPDATE users SET ${setClause} WHERE id = ?`;
+    const setClause = fields.map((field, index) => `${field} = @value${index}`).join(', ');
 
-    // Append userId to the values array
-    values.push(userId);
+    try {
+        const request = db.request();
+        fields.forEach((field, index) => {
+            request.input(`value${index}`, updatedFields[field]);
+        });
+        request.input('id', sql.Int, userId);
 
-    db.query(sql, values, (err, result) => {
-        if (err) {
-            console.error("Error updating user profile:", err);
-            return res.status(500).json({ message: "Error updating profile" });
-        }
+        const result = await request.query(`UPDATE users SET ${setClause} WHERE id = @id`);
 
-        // If no rows were updated, the user ID might be invalid
-        if (result.affectedRows === 0) {
+        if (result.rowsAffected[0] === 0) {
             return res.status(404).json({ message: "User not found or no changes made" });
         }
 
         res.json({ message: "Profile updated successfully" });
-        console.log("Profile updated for userId:", userId);
-    });
+    } catch (err) {
+        console.error("Error updating user profile:", err.message);
+        res.status(500).json({ message: "Error updating profile" });
+    }
 });
 
+// Products Endpoint
+app.get('/products', async (req, res) => {
+    try {
+        const result = await db.request().query('SELECT * FROM products');
+        res.json(result.recordset);
+    } catch (err) {
+        console.error("Error fetching products:", err.message);
+        res.status(500).json({ message: "Error fetching products" });
+    }
+});
 
-app.get('/products', (req, res)=>{
-    const sql = 'SELECT * FROM products';
-    db.query(sql, (err, result)=>{
-        if(err){
-            res.status(500).json({message: 'Error Fetching Products'})
-        }else{
-            res.json(result);
-        }
-    })
-})
-
-
+// Start the server
 app.listen(port, () => {
-    console.log('Server is running bro')
-})
+    console.log(`Server is running on port ${port}`);
+});
