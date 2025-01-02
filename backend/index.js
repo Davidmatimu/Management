@@ -26,7 +26,7 @@ app.post('/login', async (req, res) => {
     try {
         const result = await db.request()
             .input('username', sql.VarChar, username)
-            .query('SELECT * FROM users WHERE username = @username');
+            .query('SELECT * FROM Employees WHERE username = @username');
 
         if (result.recordset.length === 0) {
             return res.status(404).json({ message: "No username found" });
@@ -67,11 +67,10 @@ const authenticate = (req, res, next) => {
 // Profile Endpoint
 app.get('/profile', authenticate, async (req, res) => {
     const userId = req.userId;
-
     try {
         const result = await db.request()
             .input('id', sql.Int, userId)
-            .query('SELECT * FROM users WHERE id = @id');
+            .query('SELECT * FROM Employees WHERE id = @id');
 
         if (result.recordset.length === 0) {
             return res.status(404).json({ message: "User not found" });
@@ -105,7 +104,7 @@ app.post('/profile/update', authenticate, async (req, res) => {
         });
         request.input('id', sql.Int, userId);
 
-        const result = await request.query(`UPDATE users SET ${setClause} WHERE id = @id`);
+        const result = await request.query(`UPDATE Employees SET ${setClause} WHERE id = @id`);
 
         if (result.rowsAffected[0] === 0) {
             return res.status(404).json({ message: "User not found or no changes made" });

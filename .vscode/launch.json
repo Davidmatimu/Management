@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch Frontend (React)",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:8070",
+            "webRoot": "${workspaceFolder}/frontend/src"
+        },
+        {
+            "name": "Launch Backend (Node.js)",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/backend/index.js",
+            "port": 9229
+        }
+    ]
+}

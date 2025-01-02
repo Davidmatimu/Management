@@ -36,7 +36,7 @@ requestsRoutesrouter.post('/', async (req, res) => {
     } = req.body;
 
     try {
-        const sql = `INSERT INTO users (
+        const sql = `INSERT INTO Employees (
             vendor_Name, vendor_Location, vendor_Telephone, vendor_Email, vendor_Website,
             vendor_POC, course_Title, course_Number, training_Start_Date, training_End_Date,
             training_Duty_Hours, training_Non_Duty_Hours, training_Purpose_Type, training_Type_Code,
@@ -73,10 +73,10 @@ requestsRoutesrouter.post('/', async (req, res) => {
 
 // Fetch All Products Endpoint
 requestsRoutesrouter.get('/', (req, res) => {
-    const sql = 'SELECT * FROM users'; // Adjust table name if needed
+    const sql = 'SELECT * FROM Employees'; // Adjust table name if needed
     db.query(sql, (err, result) => {
         if (err) {
-            console.error('Error Fetching Users:', err);
+            console.error('Error Fetching Employees:', err);
             return res.status(500).json({ message: 'Error Fetching Users' });
         }
         res.json(result);
