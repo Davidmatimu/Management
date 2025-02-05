@@ -1,0 +1,18 @@
+{
+    "type": "mssql",
+    "host": "localhost",
+    "port": 5432,
+    "username": "TMS",
+    "password": "admin",
+    "database": "TMS",
+    "synchronize": true,
+    "logging": false,
+    "entities": ["src/entity/**/*.ts"],
+    "migrations": ["src/migration/**/*.ts"],
+    "subscribers": ["src/subscriber/**/*.ts"],
+    "cli": {
+      "entitiesDir": "src/entity",
+      "migrationsDir": "src/migration",
+      "subscribersDir": "src/subscriber"
+    }
+  }

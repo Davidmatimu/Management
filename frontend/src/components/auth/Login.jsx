@@ -5,7 +5,6 @@ import { Link, useNavigate } from "react-router-dom";
 const Login = ({ setLoggedIn }) => {
     const navigate = useNavigate();
     const [error, setError] = useState('');
-
     const [formData, setFormData] = useState({
         username: '',
         password: '',
