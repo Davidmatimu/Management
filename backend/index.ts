@@ -4,8 +4,8 @@ import cors from 'cors';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { DataSource } from 'typeorm';
-import { Employee } from './entity/Employee';
-import { Product } from './entity/Product';
+//import { Employee } from './entity/Employee';
+//import { Product } from './entity/Product';
 
 const app = express();
 const port = 5500;
