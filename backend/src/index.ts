@@ -3,36 +3,18 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { DataSource } from 'typeorm';
-//import { Employee } from './entity/Employee';
+import { AppDataSource } from './db/connection';
+import { Employee } from './entity/Employee';
 //import { Product } from './entity/Product';
 
 const app = express();
 const port = 5500;
-
 app.use(express.json());
 app.use(cors());
 
 interface AuthenticatedRequest extends Request {
     userId?: number;
 }
-
-// Initialize TypeORM connection
-const AppDataSource = new DataSource({
-    type: "mssql",
-    host: "your_db_host",
-    port: 1433,
-    username: "your_db_user",
-    password: "your_db_password",
-    database: "your_db_name",
-    entities: [Employee, Product],
-    synchronize: true,
-    logging: false,
-});
-
-AppDataSource.initialize()
-    .then(() => console.log('Database connected'))
-    .catch((err) => console.error('Database connection error:', err));
 
 // Login Endpoint
 app.post('/login', async (req: Request, res: Response): Promise<void> => {
@@ -87,10 +69,10 @@ const authenticate = (req: AuthenticatedRequest, res: Response, next: NextFuncti
     }
 };
 
-// Profile Endpoint
-app.get('/profile', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+app.get('/profile', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     if (!req.userId) {
-        return res.status(403).json({ message: "Unauthorized" });
+        res.status(403).json({ message: "Unauthorized" });
+        return;
     }
 
     try {
@@ -98,27 +80,32 @@ app.get('/profile', authenticate, async (req: AuthenticatedRequest, res: Respons
         const user = await employeeRepository.findOne({ where: { id: req.userId } });
 
         if (!user) {
-            return res.status(404).json({ message: "User not found" });
+            res.status(404).json({ message: "User not found" });
+            return;
         }
 
-        return res.json(user);
+        res.json(user);
     } catch (err: any) {
         console.error("Error fetching user profile:", err.message);
-        return res.status(500).json({ message: "Error fetching details" });
+        res.status(500).json({ message: "Error fetching details" });
     }
 });
 
+
 // Products Endpoint
-app.get('/products', async (req: Request, res: Response) => {
+/*app.get('/products', async (req: Request, res: Response): Promise<void> => {
     try {
         const productRepository = AppDataSource.getRepository(Product);
         const products = await productRepository.find();
-        return res.json(products);
+        
+        res.json(products); // No need to return here
     } catch (err: any) {
         console.error("Error fetching products:", err.message);
-        return res.status(500).json({ message: "Error fetching products" });
+        res.status(500).json({ message: "Error fetching products" });
     }
 });
+*/
+
 
 // Start the server
 app.listen(port, () => {
