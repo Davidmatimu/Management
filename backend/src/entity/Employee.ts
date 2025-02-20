@@ -6,7 +6,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-@Entity('employee')
+@Entity()
 export class Employee {
   @PrimaryGeneratedColumn()
   id!: number; // Definite assignment assertion
