@@ -1,0 +1,12 @@
+.app{
+    display:flex;
+    align-items: center;
+    justify-content: center;
+    height:100vh;
+    
+}
+
+input{
+    padding: 15px;
+    margin: 10px 0px;
+}
