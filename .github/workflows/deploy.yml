@@ -1,0 +1,84 @@
+name: Build and Deploy to EKS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: tms-eks
+  NAMESPACE: tms
+
+permissions:
+  id-token: write # required for OIDC -> AWS role assumption
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image tag
+        id: tag
+        run: echo "value=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push backend image
+        working-directory: backend
+        env:
+          REPO: ${{ steps.ecr.outputs.registry }}/tms-backend
+        run: |
+          docker build -t "$REPO:${{ steps.tag.outputs.value }}" -t "$REPO:latest" .
+          docker push "$REPO:${{ steps.tag.outputs.value }}"
+          docker push "$REPO:latest"
+
+      - name: Build and push frontend image
+        working-directory: frontend
+        env:
+          REPO: ${{ steps.ecr.outputs.registry }}/tms-frontend
+        run: |
+          docker build \
+            --build-arg REACT_APP_API_URL=https://api.${{ vars.DOMAIN_NAME }} \
+            --build-arg REACT_APP_KEYCLOAK_URL=https://auth.${{ vars.DOMAIN_NAME }} \
+            -t "$REPO:${{ steps.tag.outputs.value }}" -t "$REPO:latest" .
+          docker push "$REPO:${{ steps.tag.outputs.value }}"
+          docker push "$REPO:latest"
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Deploy new images
+        env:
+          TAG: ${{ needs.build-and-push.outputs.image_tag }}
+        run: |
+          BACKEND_IMAGE=$(aws ecr describe-repositories --repository-names tms-backend --query 'repositories[0].repositoryUri' --output text)
+          FRONTEND_IMAGE=$(aws ecr describe-repositories --repository-names tms-frontend --query 'repositories[0].repositoryUri' --output text)
+
+          kubectl set image deployment/tms-backend backend="$BACKEND_IMAGE:$TAG" -n "$NAMESPACE"
+          kubectl set image deployment/tms-frontend frontend="$FRONTEND_IMAGE:$TAG" -n "$NAMESPACE"
+
+          kubectl rollout status deployment/tms-backend -n "$NAMESPACE" --timeout=180s
+          kubectl rollout status deployment/tms-frontend -n "$NAMESPACE" --timeout=180s

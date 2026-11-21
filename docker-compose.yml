@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # ─── PostgreSQL Database ────────────────────────────────────────────────────
+  # Backing store for the TMS backend (users, programs, requests, notifications)
+  postgres:
+    image: postgres:16-alpine
+    container_name: tms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tms
+      POSTGRES_PASSWORD: tms_password
+      POSTGRES_DB: tms
+    ports:
+      # Host port 55432 -> container 5432: this machine has local Postgres
+      # clusters already bound to 5432 and 5433, so we use an uncommon port.
+      - "55432:5432"
+    volumes:
+      - tms-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tms -d tms"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - tms-network
+
+  # ─── Keycloak Identity Provider ─────────────────────────────────────────────
+  # Runs in development mode with embedded database (no external DB needed)
+  # Admin Console: http://localhost:8080/admin/master/console/
+  # Default credentials: admin / adminpassword
+  # Auto-imports the tms-realm (roles, clients, seeded test users) on startup
+  # from ./keycloak/realm-export.json - see README for the seeded test accounts.
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: tms-keycloak
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: adminpassword
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HOSTNAME: localhost
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    healthcheck:
+      # The Keycloak image ships without curl/wget; probe the port with bash's /dev/tcp instead.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /realms/master/.well-known/openid-configuration HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q '200'"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+    networks:
+      - tms-network
+
+# ─── Networks ──────────────────────────────────────────────────────────────
+networks:
+  tms-network:
+    driver: bridge
+
+# ─── Volumes ─────────────────────────────────────────────────────────────────
+volumes:
+  tms-postgres-data:

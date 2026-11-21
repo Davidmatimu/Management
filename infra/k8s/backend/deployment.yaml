@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tms-backend
+  namespace: tms
+  labels:
+    app: tms-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tms-backend
+  template:
+    metadata:
+      labels:
+        app: tms-backend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: backend
+          # Replaced by CI/CD (see .github/workflows/deploy.yml) or manually:
+          #   kubectl set image deployment/tms-backend backend=<ECR_URL>:<TAG> -n tms
+          image: __ECR_BACKEND_URL__:__TAG__
+          ports:
+            - containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: tms-backend-config
+            - secretRef:
+                name: tms-app-db
+            - secretRef:
+                name: tms-app-secrets
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tms-backend
+  namespace: tms
+spec:
+  selector:
+    app: tms-backend
+  ports:
+    - port: 80
+      targetPort: 3001
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tms-backend
+  namespace: tms
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tms-backend
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tms-backend
+  namespace: tms
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: tms-backend

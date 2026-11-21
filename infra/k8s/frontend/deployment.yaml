@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tms-frontend
+  namespace: tms
+  labels:
+    app: tms-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tms-frontend
+  template:
+    metadata:
+      labels:
+        app: tms-frontend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: frontend
+          # Replaced by CI/CD (see .github/workflows/deploy.yml) or manually:
+          #   kubectl set image deployment/tms-frontend frontend=<ECR_URL>:<TAG> -n tms
+          # Note: REACT_APP_* vars are baked in at image build time (see
+          # frontend/Dockerfile build args) - this image tag is only valid
+          # for the domain it was built for.
+          image: __ECR_FRONTEND_URL__:__TAG__
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tms-frontend
+  namespace: tms
+spec:
+  selector:
+    app: tms-frontend
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tms-frontend
+  namespace: tms
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tms-frontend
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tms-frontend
+  namespace: tms
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: tms-frontend

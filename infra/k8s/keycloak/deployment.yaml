@@ -1,0 +1,100 @@
+# Single replica: Keycloak clustering (KC_CACHE_STACK=kubernetes + pod
+# discovery RBAC) is real additional setup, deliberately left out of this
+# first pass - see docs/AWS-DEPLOYMENT.md "Scaling Keycloak" section.
+# The RDS-backed DB means a pod restart doesn't lose realm data, so a
+# single replica is a reasonable place to start.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tms-keycloak
+  namespace: tms
+  labels:
+    app: tms-keycloak
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: tms-keycloak
+  template:
+    metadata:
+      labels:
+        app: tms-keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.0
+          args: ["start", "--import-realm"]
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9000
+          env:
+            - name: KC_DB
+              value: "postgres"
+            - name: KC_DB_URL_HOST
+              valueFrom: { secretKeyRef: { name: tms-keycloak-db, key: KC_DB_URL_HOST } }
+            - name: KC_DB_URL_PORT
+              valueFrom: { secretKeyRef: { name: tms-keycloak-db, key: KC_DB_URL_PORT } }
+            - name: KC_DB_URL_DATABASE
+              valueFrom: { secretKeyRef: { name: tms-keycloak-db, key: KC_DB_URL_DATABASE } }
+            - name: KC_DB_USERNAME
+              valueFrom: { secretKeyRef: { name: tms-keycloak-db, key: KC_DB_USERNAME } }
+            - name: KC_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: tms-keycloak-db, key: KC_DB_PASSWORD } }
+            - name: KEYCLOAK_ADMIN
+              valueFrom: { secretKeyRef: { name: tms-keycloak-admin, key: KEYCLOAK_ADMIN } }
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: tms-keycloak-admin, key: KEYCLOAK_ADMIN_PASSWORD } }
+            - name: KC_HOSTNAME
+              value: "https://auth.__DOMAIN__"
+            - name: KC_HOSTNAME_STRICT
+              value: "true"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_PROXY_HEADERS
+              value: "xforwarded"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1024Mi
+      volumes:
+        - name: realm-import
+          configMap:
+            name: tms-realm-import
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tms-keycloak
+  namespace: tms
+spec:
+  selector:
+    app: tms-keycloak
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP

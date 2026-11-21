@@ -1,0 +1,140 @@
+{
+  "realm": "tms-realm",
+  "enabled": true,
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
+  "editUsernameAllowed": true,
+  "loginWithEmailAllowed": true,
+  "resetPasswordAllowed": true,
+  "sslRequired": "external",
+  "roles": {
+    "realm": [
+      { "name": "employee", "description": "Regular employee who can request training" },
+      { "name": "supervisor", "description": "Approves direct reports' training requests" },
+      { "name": "AO", "description": "Approving Official - final approval on training requests" },
+      { "name": "HR", "description": "Manages training programs and has full visibility" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "tms-frontend",
+      "name": "TMS Frontend (SPA)",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["https://app.__DOMAIN__/*"],
+      "webOrigins": ["https://app.__DOMAIN__"]
+    },
+    {
+      "clientId": "tms-backend",
+      "name": "TMS Backend (Resource Server)",
+      "enabled": true,
+      "publicClient": false,
+      "bearerOnly": true,
+      "protocol": "openid-connect",
+      "secret": "__KEYCLOAK_CLIENT_SECRET__",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "cac-x509-config",
+      "config": {
+        "x509-cert-auth.mapping-source-selection": "Subject's Common Name",
+        "x509-cert-auth.regular-expression": "CN=.*\\.([0-9]+)(?:,|$)",
+        "x509-cert-auth.mapper-selection": "User Attribute",
+        "x509-cert-auth.mapper-selection.user-attribute-name": "EDIPI",
+        "x509-cert-auth.canonical-dn-enabled": "false",
+        "x509-cert-auth.serialnumber-hex-enabled": "false",
+        "x509-cert-auth.timestamp-validation-enabled": "true",
+        "x509-cert-auth.crl-checking-enabled": "false",
+        "x509-cert-auth.ocsp-checking-enabled": "false"
+      }
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "browser-cac",
+      "description": "CAC/PIV-ready browser flow: X.509 client certificate (DoD PKI) as an alternative to username/password. Not bound as the realm's active browser flow yet - see keycloak/CAC-SETUP.md before activating.",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        },
+        {
+          "authenticator": "auth-x509-client-username-form",
+          "authenticatorConfig": "cac-x509-config",
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        },
+        {
+          "requirement": "ALTERNATIVE",
+          "priority": 30,
+          "autheticatorFlow": true,
+          "flowAlias": "browser-cac forms",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "browser-cac forms",
+      "description": "Username/password fallback for browser-cac when no client certificate is presented",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        },
+        {
+          "requirement": "CONDITIONAL",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "flowAlias": "browser-cac Browser - Conditional OTP",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "browser-cac Browser - Conditional OTP",
+      "description": "Flow to determine if the OTP is required for the authentication",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-configured",
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        }
+      ]
+    }
+  ]
+}

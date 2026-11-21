@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars and fill in - terraform.tfvars is gitignored.
+
+aws_region   = "us-east-1"
+project_name = "tms"
+environment  = "production"
+
+# Must already be a Route53 public hosted zone in this AWS account.
+domain_name = "tms.example.com"
+
+# owner/repo - used to scope the GitHub Actions OIDC deploy role
+github_repository = "your-org/TrainingManagementSystem"
+
+node_instance_types = ["t3.medium"]
+node_desired_size   = 2
+node_min_size       = 2
+node_max_size       = 4
+
+db_instance_class = "db.t4g.micro"

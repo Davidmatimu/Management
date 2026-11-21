@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tms-backend-config
+  namespace: tms
+data:
+  NODE_ENV: "production"
+  PORT: "3001"
+  FRONTEND_URL: "https://app.__DOMAIN__"
+  KEYCLOAK_URL: "https://auth.__DOMAIN__"
+  KEYCLOAK_REALM: "tms-realm"
+  KEYCLOAK_CLIENT_ID: "tms-backend"

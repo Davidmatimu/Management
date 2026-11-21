@@ -1,0 +1,46 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tms-ingress
+  namespace: tms
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # Filled in by scripts/deploy.sh from the Terraform output
+    # `acm_certificate_arn` - see docs/AWS-DEPLOYMENT.md step 7.
+    alb.ingress.kubernetes.io/certificate-arn: __ACM_CERTIFICATE_ARN__
+spec:
+  rules:
+    - host: "app.__DOMAIN__"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tms-frontend
+                port:
+                  number: 80
+    - host: "api.__DOMAIN__"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tms-backend
+                port:
+                  number: 80
+    - host: "auth.__DOMAIN__"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tms-keycloak
+                port:
+                  number: 80
